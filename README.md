@@ -1,1 +1,1 @@
-# deep-learning-in-ner
+# text-sequence-labeling

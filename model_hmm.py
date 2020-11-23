@@ -1,5 +1,6 @@
 import itertools
 import random
+import operator
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -50,3 +51,15 @@ print(m)
 plt.imshow(m)
 plt.show()
 
+def viterbi(nodes, weight)
+    paths = nodes[0] # 初始化起始路径
+    for l in range(1, len(nodes)): # 遍历后面的节点
+        paths_old, paths = paths, {}
+        for n, ns in nodes[l].items(): # 当前时刻的所有节点
+            max_path, max_score = '', -1e10
+            for p, ps in paths_old.items(): # 截止至前一时刻的最优路径集合
+                score = ns + ps + weight[p[-1]+n] # 计算新分数
+                if score > max_score: # 如果新分数大于已有的最大分
+                    max_path, max_score = p + n, score # 更新路径
+            paths[max_path] = max_score # 储存到当前时刻所有节点的最优路径
+    return max(path.items(), key=operator.itemgetter(1))
