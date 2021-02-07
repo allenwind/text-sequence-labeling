@@ -1,5 +1,9 @@
 # self
-layers.py
+dataset/china-people-daily-ner-corpus/
+dataset/dh_msra.txt
+dataset/ner
+weights/weights.*
+weights/checkpoint
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
