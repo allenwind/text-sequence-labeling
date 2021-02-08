@@ -71,7 +71,7 @@ class ModelWithCRFLoss(tf.keras.Model):
         return results
 
     # def predict_step(self, data):
-    #     pass
+    #     x, y, sample_weight = tf.keras.utils.unpack_x_y_sample_weight(data)
 
     def compute_loss(self, x, y, sample_weight, training):
         viterbi_tags, potentials, lengths, trans = self(x, training=training)

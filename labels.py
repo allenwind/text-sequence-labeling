@@ -1,6 +1,7 @@
 import itertools
 
 # 标签相关处理函数
+# BIOES/BIO/BMESO
 
 def gen_ner_labels(tags, clabels, withO=True):
     labels = itertools.product(tags, clabels)
@@ -13,20 +14,35 @@ def gen_ner_labels(tags, clabels, withO=True):
 
 IOBES = list("SBIE")
 BIO = list("BI")
+BMES = list("BMES")
 
 def ids2tags(ids, id2label):
     # 标签ID序列转标签序列
     return [id2label[i] for i in ids]
 
 def batch_ids2tags(batch_ids, id2label):
-    pass
+    batch_tags = []
+    for ids in batch_ids:
+        batch_tags.append(ids2tags(ids, id2label))
+    return batch_tags
 
 def tags2ids(tags, label2id):
     # 标签序列转标签ID序列
     return [label2id[tag] for tag in tags]
 
 def batch_tags2ids(batch_tags, label2id):
-    pass
+    batch_ids = []
+    for tags in batch_tags:
+        batch_ids.append(tags2ids(tags, label2id))
+    return batch_ids
+
+class TaggingTransformer:
+
+    def transform(self, tags):
+        pass
+
+    def inverse_transform(self, ids):
+        pass
 
 def bio2iobes(tags):
     # BIO标签转IOBES标签
@@ -75,6 +91,21 @@ def iobes2bio(tags):
         tag = tag + "-" + label
         ntags.append(tag)
     return ntags
+
+def bmes2iobes(tags):
+    # BMES标签转成IOBES标签
+    # 实则就是 M -> I
+    ntags = []
+    for tag in tags:
+        if tag.startswith("M"):
+            tag = "I" + tag[1:]
+        ntags.append(tag)
+    return ntags
+
+def bmes2bio(tags):
+    iobes_tags = bmes2iobes(tags)
+    bio_tags = iobes2bio(iobes_tags)
+    return bio_tags
 
 def split_into_tags_labels(tags):
     # 实体标注和实体类别分离

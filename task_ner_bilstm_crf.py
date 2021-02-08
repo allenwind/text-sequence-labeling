@@ -8,6 +8,7 @@ from tensorflow.keras import *
 # assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
 # tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
+import dataset
 from layers import MaskBiLSTM
 from crf import CRF, ModelWithCRFLoss
 from labels import gen_ner_labels
@@ -43,6 +44,8 @@ def load_dataset(file, shuffle=True):
 
         assert len(chars) == len(tags)
     return X, y
+
+# load_dataset = dataset.load_msra
 
 X_train, y_train = load_dataset("train")
 tokenizer = CharTokenizer()
