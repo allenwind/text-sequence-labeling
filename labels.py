@@ -1,4 +1,5 @@
 import itertools
+import collections
 
 # 标签相关处理函数
 # BIOES/BIO/BMESO
@@ -12,9 +13,41 @@ def gen_ner_labels(tags, clabels, withO=True):
     label2id = {j:i for i,j in id2label.items()}
     return labels, id2label, label2id
 
-IOBES = list("SBIE")
-BIO = list("BI")
-BMES = list("BMES")
+BIO = ["B", "I"]
+IOBES = ["S", "B", "I", "E"]
+BMES = ["B", "M", "E", "S"]
+
+def find_tag_type(batch_y, limit=None):
+    # 确定标签类型
+    s = set()
+    for tags in batch_y[:limit]:
+        for tag in tags:
+            if tag == "O":
+                continue
+            tag, label = tag.split("-", 1)
+            s.add(tag)
+    if len(s) == 2:
+        return BIO
+    if "M" in s:
+        return BMES
+    return IOBES
+
+def find_clabels(batch_y, limit=None):
+    # 确定类别集合
+    clabels = set()
+    for tags in batch_y[:limit]:
+        for tag in tags:
+            if tag == "O":
+                continue
+            tag, label = tag.split("-", 1)
+            clabels.add(label)
+    return sorted(clabels)
+
+def labels_counter(y):
+    # 标签统计
+    y = itertools.chain(*y)
+    c = collections.Counter(y)
+    return c
 
 def ids2tags(ids, id2label):
     # 标签ID序列转标签序列
@@ -37,12 +70,34 @@ def batch_tags2ids(batch_tags, label2id):
     return batch_ids
 
 class TaggingTransformer:
+    """标签映射，标签的转换和逆转换"""
 
-    def transform(self, tags):
-        pass
+    def fit(self, batch_tags):
+        self.labels = set(itertools.chain(*batch_tags))
+        self.id2label = {i:j for i,j in enumerate(self.labels)}
+        self.label2id = {j:i for i,j in self.id2label.items()}
 
-    def inverse_transform(self, ids):
-        pass
+    def transform(self, batch_tags):
+        batch_ids = []
+        for tags in batch_tags:
+            ids = []
+            for tag in tags:
+                ids.append(self.label2id[tag])
+            batch_ids.append(ids)
+        return batch_ids
+
+    def inverse_transform(self, batch_ids):
+        batch_tags = []
+        for ids in batch_ids:
+            tags = []
+            for i in ids:
+                tags.append(self.id2label[i])
+            batch_tags.append(tags)
+        return batch_tags
+
+    @property
+    def num_classes(self):
+        return len(self.labels)
 
 def bio2iobes(tags):
     # BIO标签转IOBES标签
@@ -121,60 +176,47 @@ def split_into_tags_labels(tags):
         labels.append(label)
     return ntags, labels
 
-def find_entities_by_bio_tags(text, tags):
-    # 根据BIO标签提取文本中的实体
+def find_entities(text, tags, withO=False):
+    # 根据标签提取文本中的实体
+    # 适合BIO和BIOES标签
+    # withO是否返回O标签内容
     def segment_by_tags(text, tags):
         buf = ""
-        plabel = None
         for tag, char in zip(tags, text):
             if tag == "O":
-                continue
-            tag, label = tag.split("-")
-            if tag == "B":
-                if buf:
-                    yield buf, plabel
-                buf = char
-            elif tag == "I":
-                buf += char
-            plabel = label
-
-        if buf:
-            yield buf, plabel
-    return list(segment_by_tags(text, tags))
-
-def find_entities_by_iobes_tags(text, tags):
-    # 根据IOBES标签提取文本中的实体
-    def segment_by_tags(text, tags):
-        buf = ""
-        plabel = None
-        for tag, char in zip(tags, text):
-            if tag == "O":
-                continue
-            tag, label = tag.split("-")
+                label = tag
+            else:
+                tag, label = tag.split("-")
             if tag == "B" or tag == "S":
                 if buf:
                     yield buf, plabel
                 buf = char
-            elif tag == "I" or tag =="E":
+                plabel = label
+            elif tag == "I" or tag == "E":
                 buf += char
-            plabel = label
-
+            elif withO and tag == "O":
+                # tag == "O"
+                if buf and plabel != "O":
+                    yield buf, plabel
+                    buf = ""
+                buf += char
+                plabel = label
         if buf:
             yield buf, plabel
     return list(segment_by_tags(text, tags))
 
-def split_chunks(text, tags, maxlen):
-    # 把长样本切分多个块
-    if len(text) <= maxlen:
-        return [text], [tags]
-
-def merge_chunks(chunks):
-    # 合并多个chunks
-    pass
-
 if __name__ == "__main__":
     text = "AABCCCCCDD"
     tags = ["O", "O", "B-LOC", "B-LOC", "I-LOC", "I-LOC", "I-LOC", "I-LOC", "O", "O"]
+    
+    print(find_tag_type([tags]))
+    print(find_clabels([tags]))
+
+    labels, id2label, label2id = gen_ner_labels(IOBES, ["LOC", "PER", "ORG"])
+    print(labels)
+    print(id2label)
+    print(label2id)
+
     iobes_tags = bio2iobes(tags)
     bio_tags = iobes2bio(iobes_tags)
     print(tags)
@@ -185,5 +227,5 @@ if __name__ == "__main__":
     print(ntags)
     print(labels)
 
-    print(find_entities_by_bio_tags(text, bio_tags))
-    print(find_entities_by_iobes_tags(text, iobes_tags))
+    print(find_entities(text, bio_tags, withO=True))
+    print(find_entities(text, iobes_tags, withO=True))

@@ -1,5 +1,7 @@
 import collections
+import numpy as np
 from tensorflow.keras.preprocessing import sequence
+from labels import batch_tags2ids, ids2tags
 
 def pad(x, maxlen):
     x = sequence.pad_sequences(
@@ -12,9 +14,10 @@ def pad(x, maxlen):
     )
     return x
 
-def preprocess_dataset(X, y, maxlen, tokenizer):
+def preprocess_dataset(X, y, maxlen, label2id, tokenizer):
     # 转成id序列并截断
     X = tokenizer.transform(X)
+    y = batch_tags2ids(y, label2id)
     X = pad(X, maxlen)
     y = pad(y, maxlen)
     return X, y
@@ -47,27 +50,56 @@ class CharTokenizer:
     def vocab_size(self):
         return len(self.char2id) + 2
 
-def find_entities(text, tags, id2label):
+class LabelTransformer:
+
+    def fit(self, batch_y):
+        pass
+
+    def transform(self, batch_ids):
+        pass
+
+def find_entities(text, tags):
     # 根据标签提取文本中的实体
+    # 适合BIO和BIOES标签
     def segment_by_tags(text, tags):
         buf = ""
         plabel = None
         for tag, char in zip(tags, text):
-            tag = id2label[tag]
             if tag == "O":
                 continue
             tag, label = tag.split("-")
-            if tag == "B":
+            if tag == "B" or tag == "S":
                 if buf:
                     yield buf, plabel
                 buf = char
-            elif tag == "I":
+            elif tag == "I" or tag == "E":
                 buf += char
             plabel = label
 
         if buf:
             yield buf, plabel
     return list(segment_by_tags(text, tags))
+
+def viterbi_decode(scores, trans, return_score=False):
+    # 使用viterbi算法求最优路径
+    # scores.shape = (seq_len, num_tags)
+    # trans.shape = (num_tags, num_tags)
+    dp = np.zeros_like(scores)
+    backpointers = np.zeros_like(scores, dtype=np.int32)
+    dp[0] = scores[0]
+    for t in range(1, scores.shape[0]):
+        v = np.expand_dims(dp[t-1], axis=1) + trans
+        dp[t] = scores[t] + np.max(v, axis=0)
+        backpointers[t] = np.argmax(v, axis=0)
+
+    viterbi = [np.argmax(dp[-1])]
+    for bp in reversed(backpointers[1:]):
+        viterbi.append(bp[viterbi[-1]])
+    viterbi.reverse()
+    if return_score:
+        viterbi_score = np.max(dp[-1])
+        return viterbi, viterbi_score
+    return viterbi
 
 class NamedEntityRecognizer:
     """封装好的实体识别器"""
@@ -82,6 +114,33 @@ class NamedEntityRecognizer:
         size = len(text)
         ids = self.tokenizer.transform([text])
         padded_ids = pad(ids, self.maxlen)
-        tags = self.model.predict(padded_ids)[0][0]
-        tags = tags[:size]
-        return find_entities(text, tags, self.id2label)
+        tags = self.model.predict(padded_ids)[0]
+        tags = ids2tags(tags[:size], self.id2label)
+        return find_entities(text, tags)
+
+class ViterbiNamedEntityRecognizer:
+    """带Viterbi解码的实体识别器"""
+
+    def __init__(self, model, trans, tokenizer, maxlen, id2label, method="viterbi"):
+        self.model = model
+        self.trans = trans
+        self.tokenizer = tokenizer
+        self.maxlen = maxlen
+        self.id2label = id2label
+        assert method in ("viterbi", "greedy")
+        self.method = method
+
+    def decode(self, scores):
+        if self.method == "viterbi":
+            return viterbi_decode(scores, self.trans)
+        else:
+            return np.argmax(scores, axis=1).tolist()
+
+    def find(self, text):
+        size = len(text)
+        ids = self.tokenizer.transform([text])
+        padded_ids = pad(ids, self.maxlen)
+        scores = self.model.predict(padded_ids)[0][:size]
+        tags = self.decode(scores)
+        tags = ids2tags(tags, self.id2label)
+        return find_entities(text, tags)

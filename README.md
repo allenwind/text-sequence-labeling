@@ -4,6 +4,7 @@
 
 NLP中序列标注任务，包括分词（WS）、实体识别（NER）、词性标注（POS）。中文分词见[chinese-cut-word](https://github.com/allenwind/chinese-cut-word)，另外CRF提供一个简单的实现和例子，见[tensorflow-crf](https://github.com/allenwind/tensorflow-crf)。这里主要是NER相关的模型、tricks，当然需要强调，解决NER问题不一定需要序列标注方法，像中文分词类似的词典匹配方法也能。
 
+持续更新中~
 
 
 ## NER难点
@@ -44,6 +45,10 @@ NLP中序列标注任务，包括分词（WS）、实体识别（NER）、词性
 - 指针标注（Pointer Network）
 
 
+数据增强：
+
+- A
+
 
 多任务：
 
@@ -55,3 +60,8 @@ NLP中序列标注任务，包括分词（WS）、实体识别（NER）、词性
 
 - 对抗训练
 - 各种Loss
+
+
+## 参考
+
+[1] [A Survey on Deep Learning for Named Entity Recognition]()
