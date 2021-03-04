@@ -3,9 +3,27 @@ import itertools
 import random
 import re
 import numpy as np
-from labels import bmes2iobes
+from labels import bmes2iobes, iobes2bio
 
 # NER数据加载
+
+def load_recursion():
+    # TODO
+    if file not in ("train", "dev", "test"):
+        if file == "all":
+            files = ("train", "dev", "test")
+        else:
+            files = file.split("+")
+        X = []
+        y = []
+        for file in files:
+            r = load_file(file)
+            X.extend(r[0])
+            y.extend(r[1])
+        if with_labels:
+            labels = set(itertools.chain(*y))
+            return X, y, sorted(labels)
+        return X, y
 
 def load_file(file, sep=" ", shuffle=True, with_labels=False):
     # 返回逐位置标注形式
@@ -29,7 +47,7 @@ def load_file(file, sep=" ", shuffle=True, with_labels=False):
             chars.append(char)
             tags.append(label)
         X.append("".join(chars))
-        y.append(tags)
+        y.append(iobes2bio(tags))
         assert len(chars) == len(tags)
     if with_labels:
         labels = set(itertools.chain(*y))
@@ -42,7 +60,6 @@ def load_dh_msra(file="dataset/dh_msra.txt", shuffle=True, with_labels=False):
 
 PATH_CPD = "dataset/china-people-daily-ner-corpus/example.{}"
 def load_china_people_daily(file, shuffle=True, with_labels=False):
-    assert file in ("train", "dev", "test")
     file = PATH_CPD.format(file)
     return load_file(file, " ", shuffle, with_labels)
 

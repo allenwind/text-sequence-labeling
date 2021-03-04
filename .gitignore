@@ -5,6 +5,7 @@ dataset/pos
 dataset/ner
 weights/weights.*
 weights/checkpoint
+dataset/couplet
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

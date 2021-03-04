@@ -1,5 +1,8 @@
 import collections
+import itertools
 import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
 from tensorflow.keras.preprocessing import sequence
 from labels import batch_tags2ids, ids2tags
 
@@ -14,6 +17,10 @@ def pad(x, maxlen):
     )
     return x
 
+def batch_pad(x):
+    maxlen = max([len(i) for i in x])
+    return pad(x, maxlen)
+
 def preprocess_dataset(X, y, maxlen, label2id, tokenizer):
     # 转成id序列并截断
     X = tokenizer.transform(X)
@@ -21,6 +28,42 @@ def preprocess_dataset(X, y, maxlen, label2id, tokenizer):
     X = pad(X, maxlen)
     y = pad(y, maxlen)
     return X, y
+
+def batch_paded_generator(X, y, label2id, tokenizer, batch_size, epochs):
+    X = tokenizer.transform(X)
+    y = batch_tags2ids(y, label2id)
+    batchs = (len(X) // batch_size + 1) * epochs * batch_size
+    X = itertools.cycle(X)
+    y = itertools.cycle(y)
+    gen = zip(X, y)
+    batch_X = []
+    batch_y = []
+    for _ in range(batchs):
+        sample_x, sample_y = next(gen)
+        batch_X.append(sample_x)
+        batch_y.append(sample_y)
+        if len(batch_X) == batch_size:
+            yield batch_pad(batch_X), batch_pad(batch_y)
+            batch_X = []
+            batch_y = []
+
+def plot_trans(A, tags):
+    # 可视化状态矩阵A
+    ax = sns.heatmap(
+        A,
+        vmin=0.0,
+        vmax=1.0,
+        fmt=".2f",
+        cmap="copper",
+        annot=True,
+        cbar=True,
+        xticklabels=tags,
+        yticklabels=tags,
+        linewidths=0.25,
+        cbar_kws={"orientation": "horizontal"}
+    )
+    ax.set_title("Transition Matrix")
+    plt.show()
 
 class CharTokenizer:
     """字符级别Tokenizer"""
@@ -35,6 +78,7 @@ class CharTokenizer:
             for c in sample:
                 chars[c] += 1
         self.char2id = {j:i for i,j in enumerate(chars, start=2)}
+        self.id2char = {j:i for i,j in self.char2id.items()}
 
     def transform(self, X):
         # 转成ID序列
@@ -45,6 +89,15 @@ class CharTokenizer:
                 s.append(self.char2id.get(char, self.UNK))
             ids.append(s)
         return ids
+
+    def inverse_transform(self, batch_ids):
+        X = []
+        for ids in batch_ids:
+            x = []
+            for i in ids:
+                x.append(self.id2char.get(i))
+            X.append(x)
+        return X
 
     @property
     def vocab_size(self):
@@ -113,10 +166,21 @@ class NamedEntityRecognizer:
     def find(self, text):
         size = len(text)
         ids = self.tokenizer.transform([text])
-        padded_ids = pad(ids, self.maxlen)
+        padded_ids = pad(ids, size)
         tags = self.model.predict(padded_ids)[0]
         tags = ids2tags(tags[:size], self.id2label)
         return find_entities(text, tags)
+
+    def batch_find(self, texts):
+        lengths = [len(text) for text in texts]
+        ids = self.tokenizer.transform(texts)
+        padded_ids = batch_pad(ids)
+        batch_tags = self.model.predict(padded_ids)
+        batch_entities = []
+        for size, tags, text in zip(lengths, batch_tags, texts):
+            tags = ids2tags(tags[:size], self.id2label)
+            batch_entities.append(find_entities(text, tags))
+        return batch_entities
 
 class ViterbiNamedEntityRecognizer:
     """带Viterbi解码的实体识别器"""

@@ -12,10 +12,10 @@ tf.config.experimental.set_memory_growth(physical_devices[0], True)
 import dataset
 from layers import MaskBiLSTM
 from crf import CRF, ModelWithCRFLoss
-from evaluation import Evaluator
+from evaluation import Evaluator, evaluate_prf
 from snippets import *
 
-load_dataset = dataset.load_msra
+load_dataset = dataset.load_cpd
 X_train, y_train, classes = load_dataset("train", with_labels=True)
 id2label = {i:j for i,j in enumerate(classes)}
 label2id = {j:i for i,j in id2label.items()}
@@ -23,43 +23,41 @@ num_classes = len(classes)
 tokenizer = CharTokenizer()
 tokenizer.fit(X_train)
 
-maxlen = 128
-hdims = 128
+maxlen = None
+hdims = 256
 vocab_size = tokenizer.vocab_size
 
 inputs = Input(shape=(maxlen,))
-mask = Lambda(lambda x: tf.not_equal(x, 0))(inputs) # 全局mask
-x = Embedding(input_dim=vocab_size, output_dim=hdims)(inputs)
-# x = Dropout(0.1)(x)
-x = MaskBiLSTM(hdims)(x, mask=mask)
+x = Embedding(input_dim=vocab_size, output_dim=hdims, mask_zero=True)(inputs)
+x = LayerNormalization()(x)
+x = Bidirectional(LSTM(hdims, return_sequences=True), merge_mode="concat")(x)
 x = Dense(hdims)(x)
+x = Dropout(0.2)(x)
+# x = LayerNormalization()(x)
 x = Dense(num_classes)(x)
-crf = CRF(trans_initializer="orthogonal")
-# CRF需要mask来完成不定长序列的处理，这里是手动传入
-# 可以设置Embedding参数mask_zero=True，避免手动传入
-outputs = crf(x, mask=mask)
+crf = CRF(trans_initializer="glorot_normal")
+outputs = crf(x)
 
 base = Model(inputs=inputs, outputs=outputs)
 model = ModelWithCRFLoss(base)
 model.summary()
 model.compile(optimizer="adam")
 
-X_train, y_train = preprocess_dataset(X_train, y_train, maxlen, label2id, tokenizer)
-X_val, y_val = load_dataset("dev")
-# X_val, y_val = preprocess_dataset(X_val, y_val, maxlen, label2id, tokenizer)
-
 batch_size = 32
-epochs = 20
+epochs = 7
 file = "weights/weights.task.ner.bilstm.crf"
 ner = NamedEntityRecognizer(model, tokenizer, maxlen, id2label)
-data = (X_val, y_val)
+data_train = (X_train, y_train)
+X_val, y_val = load_dataset("dev")
+data_val = (X_val, y_val)
+gen = batch_paded_generator(X_train, y_train, label2id, tokenizer, batch_size, epochs)
+steps_per_epoch = len(X_train) // batch_size + 1
 model.fit(
-    X_train,
-    y_train,
+    gen,
     batch_size=batch_size,
     epochs=epochs,
-    callbacks=[Evaluator(ner, data)],
-    # validation_data=(X_val, y_val)
+    steps_per_epoch=steps_per_epoch,
+    callbacks=[Evaluator(ner, data_train, "train"), Evaluator(ner, data_val, "dev")],
 )
 
 model.save_weights(file)
@@ -67,6 +65,8 @@ model.save_weights(file)
 
 if __name__ == "__main__":
     X_test, y_test = load_dataset("test")
+    # evaluate_prf(ner, X_train, y_train)
+    evaluate_prf(ner, X_test, y_test)
     for x, y in zip(X_test, y_test):
         print(find_entities(x, y)) # 真实的实体
         print(ner.find(x)) # 预测的实体
