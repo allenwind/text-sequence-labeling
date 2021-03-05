@@ -3,8 +3,9 @@ import itertools
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+import tensorflow as tf
 from tensorflow.keras.preprocessing import sequence
-from labels import batch_tags2ids, ids2tags
+from labels import batch_tags2ids, ids2tags, find_entities
 
 def pad(x, maxlen):
     x = sequence.pad_sequences(
@@ -47,7 +48,19 @@ def batch_paded_generator(X, y, label2id, tokenizer, batch_size, epochs):
             batch_X = []
             batch_y = []
 
-def plot_trans(A, tags):
+def compute_trans(seqs, states):
+    states2id = {i:j for j,i in enumerate(states)}
+    size = len(states)
+    trans = np.zeros((size, size))
+    for seq in seqs:
+        for state1, state2 in zip(seq[:-1], seq[1:]):
+            id1 = states2id[state1]
+            id2 = states2id[state2]
+            trans[id1][id2] += 1
+    trans = trans / np.sum(trans, axis=1, keepdims=True)
+    return trans
+
+def plot_trans(A, tags, show=True):
     # 可视化状态矩阵A
     ax = sns.heatmap(
         A,
@@ -57,13 +70,14 @@ def plot_trans(A, tags):
         cmap="copper",
         annot=True,
         cbar=True,
-        xticklabels=tags,
-        yticklabels=tags,
         linewidths=0.25,
         cbar_kws={"orientation": "horizontal"}
     )
     ax.set_title("Transition Matrix")
-    plt.show()
+    ax.set_xticklabels(tags, rotation=0)
+    ax.set_yticklabels(tags, rotation=0)
+    if show:
+        plt.show()
 
 class CharTokenizer:
     """字符级别Tokenizer"""
@@ -111,27 +125,27 @@ class LabelTransformer:
     def transform(self, batch_ids):
         pass
 
-def find_entities(text, tags):
-    # 根据标签提取文本中的实体
-    # 适合BIO和BIOES标签
-    def segment_by_tags(text, tags):
-        buf = ""
-        plabel = None
-        for tag, char in zip(tags, text):
-            if tag == "O":
-                continue
-            tag, label = tag.split("-")
-            if tag == "B" or tag == "S":
-                if buf:
-                    yield buf, plabel
-                buf = char
-            elif tag == "I" or tag == "E":
-                buf += char
-            plabel = label
+# def find_entities(text, tags):
+#     # 根据标签提取文本中的实体
+#     # 适合BIO和BIOES标签
+#     def segment_by_tags(text, tags):
+#         buf = ""
+#         plabel = None
+#         for tag, char in zip(tags, text):
+#             if tag == "O":
+#                 continue
+#             tag, label = tag.split("-")
+#             if tag == "B" or tag == "S":
+#                 if buf:
+#                     yield buf, plabel
+#                 buf = char
+#             elif tag == "I" or tag == "E":
+#                 buf += char
+#             plabel = label
 
-        if buf:
-            yield buf, plabel
-    return list(segment_by_tags(text, tags))
+#         if buf:
+#             yield buf, plabel
+#     return list(segment_by_tags(text, tags))
 
 def viterbi_decode(scores, trans, return_score=False):
     # 使用viterbi算法求最优路径
@@ -208,3 +222,27 @@ class ViterbiNamedEntityRecognizer:
         tags = self.decode(scores)
         tags = ids2tags(tags, self.id2label)
         return find_entities(text, tags)
+
+    def batch_find(self, texts):
+        lengths = [len(text) for text in texts]
+        ids = self.tokenizer.transform(texts)
+        padded_ids = batch_pad(ids)
+        batch_scores = self.model.predict(padded_ids)
+        batch_entities = []
+        for size, scores, text in zip(lengths, batch_scores, texts):
+            tags = self.decode(scores[:size])
+            tags = ids2tags(tags, self.id2label)
+            batch_entities.append(find_entities(text, tags))
+        return batch_entities
+
+class TransitionMatrixInitializer(tf.keras.initializers.Initializer):
+    """状态矩阵的初始化"""
+
+    def __init__(self, trans):
+        self.trans = trans
+
+    def __call__(self, shape, dtype=None):
+        return self.trans
+
+    def get_config(self):
+        return {"trans": self.trans}

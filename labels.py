@@ -182,6 +182,7 @@ def find_entities(text, tags, withO=False):
     # withO是否返回O标签内容
     def segment_by_tags(text, tags):
         buf = ""
+        plabel = None
         for tag, char in zip(tags, text):
             if tag == "O":
                 label = tag
@@ -195,7 +196,6 @@ def find_entities(text, tags, withO=False):
             elif tag == "I" or tag == "E":
                 buf += char
             elif withO and tag == "O":
-                # tag == "O"
                 if buf and plabel != "O":
                     yield buf, plabel
                     buf = ""
@@ -206,6 +206,8 @@ def find_entities(text, tags, withO=False):
     return list(segment_by_tags(text, tags))
 
 if __name__ == "__main__":
+    import dataset
+
     text = "AABCCCCCDD"
     tags = ["O", "O", "B-LOC", "B-LOC", "I-LOC", "I-LOC", "I-LOC", "I-LOC", "O", "O"]
     
@@ -229,3 +231,10 @@ if __name__ == "__main__":
 
     print(find_entities(text, bio_tags, withO=True))
     print(find_entities(text, iobes_tags, withO=True))
+
+    # check
+    for ds in ("train", "dev", "test"):
+        X, y = dataset.load_msra(ds)
+        for text, tags in zip(X, y):
+            es = find_entities(text, tags, withO=True)
+            assert "".join([i[0] for i in es]) == text

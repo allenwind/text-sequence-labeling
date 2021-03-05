@@ -6,20 +6,33 @@ import tensorflow_addons as tfa
 class CRF(tf.keras.layers.Layer):
     """CRF的实现，包括trans矩阵和viterbi解码"""
 
-    def __init__(self, lr_multiplier=1, trans_initializer="glorot_uniform", **kwargs):
+    def __init__(self, lr_multiplier=1, trans_initializer="glorot_uniform", trainable=True, **kwargs):
         super(CRF, self).__init__(**kwargs)
         self.supports_masking = True
         self.lr_multiplier = lr_multiplier
-        self.trans_initializer = tf.keras.initializers.get(trans_initializer)
+        if isinstance(trans_initializer, str):
+            trans_initializer = tf.keras.initializers.get(trans_initializer)
+        self.trans_initializer = trans_initializer
+        self.trainable = trainable
 
     def build(self, input_shape):
         assert len(input_shape) == 3
         units = input_shape[-1]
-        self.trans = self.add_weight(
+        self._trans = self.add_weight(
             name="trans",
             shape=(units, units),
-            initializer=self.trans_initializer
+            dtype=tf.float32,
+            initializer=self.trans_initializer,
+            trainable=self.trainable
         )
+        if self.lr_multiplier != 1:
+            self._trans.assign(self._trans / self.lr_multiplier)
+
+    @property
+    def trans(self):
+        if self.lr_multiplier != 1:
+            return self.lr_multiplier * self._trans
+        return self._trans
 
     def call(self, inputs, mask=None):
         # 必须要有相应的mask传入

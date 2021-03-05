@@ -2,16 +2,15 @@ import tensorflow as tf
 import tqdm
 from snippets import find_entities
 
-class Evaluator(tf.keras.callbacks.Callback):
+class NEREvaluator(tf.keras.callbacks.Callback):
     """prf指标评估"""
 
-    def __init__(self, ner, data, label):
+    def __init__(self, ner, data_title_pairs):
         self.ner = ner
-        self.data = data # (X, y)
-        self.label = label
+        # (X, y, title)
+        self.data_title_pairs = data_title_pairs
 
-    def evaluate_prf(self, data):
-        X, y = data
+    def evaluate_prf(self, X, y):
         Rs = self.ner.batch_find(X) # 预测正类
         Ts = [find_entities(text, tags) for text, tags in zip(X, y)] # 真正类
         TP = TPFP = TPFN = 1e-12
@@ -27,10 +26,14 @@ class Evaluator(tf.keras.callbacks.Callback):
         return p, r, f1
 
     def on_epoch_end(self, epoch, logs=None):
-        p, r, f1 = self.evaluate_prf(self.data)
         print()
-        template = '{} - precision: {:.2f}% - recall: {:.2f}% - f1: {:.2f}%'
-        print(template.format(self.label, p, r, f1))
+        for X, y, title in self.data_title_pairs:        
+            p, r, f1 = self.evaluate_prf(X, y)
+            template = '{} - precision: {:.2f}% - recall: {:.2f}% - f1: {:.2f}%'
+            print(template.format(title, p, r, f1))
+
+class CWSEvaluator(tf.keras.callbacks.Callback):
+    pass
 
 def evaluate_prf(ner, X, y):
     trues = [find_entities(text, tags) for text, tags in zip(X, y)] # 真正类

@@ -111,8 +111,21 @@ def load_resume(file, shuffle=True, with_labels=False):
         return X, y, sorted(labels)
     return X, y
 
+def inspect_data(load):
+    import matplotlib.pyplot as plt
+    from snippets import plot_trans, compute_trans
+    i = 1
+    for ds in ("train", "dev", "test"):
+        plt.subplot(1, 3, i)
+        i += 1
+        X, y, classes = load(ds, with_labels=True)
+        trans = compute_trans(y, classes)
+        plot_trans(trans, classes, show=False)
+    plt.show()
+
 if __name__ == "__main__":
     # for testing
+
     load_dh_msra()
     for i in ("train", "dev", "test"):
         X, y, classes = load_china_people_daily(i, with_labels=True)
