@@ -49,9 +49,10 @@ class CRF(tf.keras.layers.Layer):
 class ModelWithCRFLoss(tf.keras.Model):
     """把CRFloss包装成模型，容易扩展各种loss"""
 
-    def __init__(self, base, **kwargs):
+    def __init__(self, base, return_scores=False, **kwargs):
         super(ModelWithCRFLoss, self).__init__(**kwargs)
         self.base = base
+        self.return_scores = return_scores
         self.accuracy_fn = tf.keras.metrics.Accuracy(name="accuracy")
 
     def call(self, inputs):

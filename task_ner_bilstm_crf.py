@@ -3,9 +3,9 @@ import tensorflow as tf
 from tensorflow.keras.layers import *
 from tensorflow.keras import *
 
-physical_devices = tf.config.experimental.list_physical_devices("GPU")
-assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
-tf.config.experimental.set_memory_growth(physical_devices[0], True)
+# physical_devices = tf.config.experimental.list_physical_devices("GPU")
+# assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
+# tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
 import dataset
 from crf import CRF, ModelWithCRFLoss
@@ -28,13 +28,14 @@ vocab_size = tokenizer.vocab_size
 
 inputs = Input(shape=(maxlen,))
 x = Embedding(input_dim=vocab_size, output_dim=hdims, mask_zero=True)(inputs)
-x = LayerNormalization()(x)
-x = Bidirectional(LSTM(hdims, return_sequences=True), merge_mode="concat")(x)
-x = Dense(hdims)(x)
+# x = Dropout(0.1, noise_shape=(None, maxlen, hdims))(x)
+# x = LayerNormalization()(x)
+x = Bidirectional(LSTM(hdims, return_sequences=True), merge_mode="ave")(x)
+# x = Dense(hdims)(x)
 x = Dense(num_classes)(x)
-x = Dropout(0.3)(x)
+# x = Dropout(0.3)(x)
 crf = CRF(
-    lr_multiplier=10,
+    lr_multiplier=1,
     trans_initializer="glorot_normal",
     trainable=True
 )
@@ -45,7 +46,7 @@ model = ModelWithCRFLoss(base)
 model.summary()
 model.compile(optimizer="adam")
 
-batch_size = 32
+batch_size = 64
 epochs = 7
 steps_per_epoch = len(X_train) // batch_size + 1
 gen = batch_paded_generator(X_train, y_train, label2id, tokenizer, batch_size, epochs)

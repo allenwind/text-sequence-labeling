@@ -58,7 +58,7 @@ def load_dh_msra(file="dataset/dh_msra.txt", shuffle=True, with_labels=False):
     # for evaluatoin
     return load_file(file, "\t", shuffle, with_labels)
 
-PATH_CPD = "dataset/china-people-daily-ner-corpus/example.{}"
+PATH_CPD = "dataset/ner/china-people-daily-ner-corpus/example.{}"
 def load_china_people_daily(file, shuffle=True, with_labels=False):
     file = PATH_CPD.format(file)
     return load_file(file, " ", shuffle, with_labels)
